@@ -1,0 +1,137 @@
+company:
+  name: Dragon Ship Logistics Inc.
+  address_lines:
+    - "4938 Triggs St"
+    - "Los Angeles, CA 90022"
+  phone: "(626) 669-5398"
+  account_number: "325206010906"
+  routing_number: "121000358"
+  zelle: "6266695398"
+  emails: "tracy@tofba.com；Eric.fan@tofba.com"
+  contact_note: "If you have any questions about this invoice, please contact"
+  contact_person: "[ ERIC, 626-669-5398 ]"
+
+bill_to: SMART
+
+header_scan_rows: 20
+header_required_keywords:
+  - APPOINTMENT ID
+  - DESTINATION
+  - AMOUNT
+
+container_id_regex: '^[A-Z]{4}\d{7}(?:-\d+)?$'
+
+# 空柜号且带金额时，命中则归属当前柜
+surcharge_keywords:
+  - 托架费
+  - 提拆费
+  - 无需提柜
+  - 仓租
+  - 拍照费
+
+# 命中则停止数据区 / 进入 quarantine，禁止并入末柜
+tail_block_keywords:
+  - Total Amount
+  - 总计
+  - 合计
+  - please contact
+  - 报关费
+  - 加急费
+
+unclassified_row_policy: inherit  # inherit | quarantine | fail
+# inherit: 空柜号+有金额+非尾部 → 归属当前合法柜（适配合并单元格续行）
+
+amount_quantize: "0.01"
+rounding: ROUND_HALF_UP
+container_warn_tolerance: "0.01"
+container_fail_tolerance: "0.01"
+batch_tolerance: "0.01"
+batch_block_on_total_mismatch: true
+batch_block_on_container_count_mismatch: true
+
+# template = 填 Excel 发票模板 → Excel 导出 PDF（推荐，对齐黄金样例）
+# reportlab = 纯代码绘制 PDF（无 Excel 时兜底）
+render_mode: template
+invoice_template_xlsx: null  # null 则用 templates/invoice_blank.xlsx
+
+# reportlab 兜底参数
+max_lines_single_page: 18
+min_font_size: 7
+
+invoice_no_source: ar_column  # ar_column | sequence
+date_source: bill_name  # bill_name | excel_header | today
+
+output_name_pattern: "{container_no}.pdf"
+chinese_font_path: "C:/Windows/Fonts/msyh.ttc"
+
+# -------- 步骤四：企业邮 SMTP --------
+email:
+  provider: tencent_exmail   # tencent_exmail | netease_qiye | aliyun_qiye | huawei_mail | custom
+  # host/port/use_ssl 可在 config.local.yaml 覆盖；custom 时必须自填 host
+  username: acc43@tofba.com  # 建议敏感项改放到 config.local.yaml
+  # auth_code: 客户端授权码 —— 务必写在 config.local.yaml，不要提交仓库
+  to:
+    - ACCT19.BD@smartsupplychaininc.com
+  cc:
+    - tracy@tofba.com
+    - eric.fan@tofba.com
+  sender_name: Raelyn.Li
+  subject_template: "{bill_name}账单invoice"
+  body_template: |
+    Hello, SMART team.
+
+    {bill_name}账单invoice已附上，请查收，谢谢！
+
+    Best Regards,
+    {sender_name}
+  require_batch_ok: true
+  require_pdf_count_match: true
+  max_attachment_mb: 20
+  split_when_too_large: true
+
+
+fee_rules:
+  chassis:
+    enabled: true
+    destination_keywords: ["车架费"]
+    days_regex: "车架使用天数(\\d+)天"
+    free_days: 5
+    daily_rate: 40
+  pallet:
+    enabled: true
+    feedback_keywords: ["100一板"]
+    unit_rate: 100
+
+schema_detection:
+  enabled: true
+  allowed_headers:
+    - APPOINTMENT ID
+    - Total Volume
+    - CBM
+    - DESTINATION
+    - ISA
+    - QTY
+    - RATE
+    - AMOUNT
+    - 备注
+    - 最终结算金额
+    - AR发票
+    - 九方对账反馈
+    - pdf生成问题反馈
+
+
+# 核心模板字段固定；缺失即终止。其余业务列、辅助表和隐藏列允许扩展并写入预检报告。
+core_columns:
+  - appointment_id
+  - total_volume
+  - cbm
+  - destination
+  - isa
+  - qty
+  - rate
+  - amount
+
+
+# 正式出账只以主明细表为准；隐藏“汇总”表默认不参与金额校验。
+summary_validation:
+  enabled: false
